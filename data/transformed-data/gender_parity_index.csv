@@ -1,0 +1,47 @@
+Discipline,Female,Male,Total,ParityIndex
+3x3 Basketball,32,32,64,1.0
+Archery,64,64,128,1.0
+Artistic Gymnastics,98,98,196,1.0
+Basketball,144,144,288,1.0
+Beach Volleyball,48,48,96,1.0
+Canoe Slalom,41,41,82,1.0
+Cycling BMX Racing,24,24,48,1.0
+Cycling Mountain Bike,38,38,76,1.0
+Golf,60,60,120,1.0
+Handball,168,168,336,1.0
+Hockey,192,192,384,1.0
+Marathon Swimming,25,25,50,1.0
+Modern Pentathlon,36,36,72,1.0
+Sailing,175,175,350,1.0
+Shooting,178,178,356,1.0
+Skateboarding,40,40,80,1.0
+Sport Climbing,20,20,40,1.0
+Surfing,20,20,40,1.0
+Table Tennis,86,86,172,1.0
+Taekwondo,65,65,130,1.0
+Trampoline Gymnastics,16,16,32,1.0
+Triathlon,55,55,110,1.0
+Volleyball,144,144,288,1.0
+Fencing,107,108,215,0.995
+Weightlifting,98,99,197,0.995
+Badminton,86,87,173,0.994
+Diving,72,71,143,0.993
+Canoe Sprint,123,126,249,0.988
+Rowing,257,265,522,0.985
+Tennis,94,97,191,0.984
+Rugby Sevens,146,151,297,0.983
+Judo,192,201,393,0.977
+Karate,40,42,82,0.976
+Cycling Track,90,99,189,0.952
+Athletics,969,1072,2041,0.95
+Cycling BMX Freestyle,10,9,19,0.947
+Swimming,361,418,779,0.927
+Water Polo,122,146,268,0.91
+Football,264,344,608,0.868
+Baseball/Softball,90,144,234,0.769
+Equestrian,73,125,198,0.737
+Boxing,102,187,289,0.706
+Cycling Road,70,131,201,0.697
+Wrestling,96,193,289,0.664
+Artistic Swimming,105,0,105,0.0
+Rhythmic Gymnastics,96,0,96,0.0

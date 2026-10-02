@@ -1,0 +1,101 @@
+# Tokyo Olympics — Azure Data Engineering Pipeline
+
+An end-to-end Azure data pipeline built on the Tokyo 2020 Olympics dataset: ingestion with Azure Data Factory, transformation in Databricks, and a serverless SQL serving layer in Synapse Analytics, with two original analytical metrics not found in the source dataset.
+
+Built as a one-day portfolio sprint, loosely following Darshil Parmar's "Olympic Data Analytics" tutorial for the overall shape of the pipeline, but diverging from it in architecture, resilience, and analysis — detailed below.
+
+## Architecture
+
+```
+GitHub (raw CSVs)
+      │
+      ▼
+Azure Data Factory  ──  parameterized ForEach + single Copy Data activity
+      │
+      ▼
+ADLS Gen2  (raw-data/)
+      │
+      ▼
+Azure Databricks  ──  PySpark transformation (Serverless compute)
+      │
+      ▼
+ADLS Gen2  (transformed-data/)
+      │
+      ▼
+Azure Synapse Analytics  ──  Serverless SQL views (OPENROWSET)
+      │
+      ▼
+SQL analytics + charts
+```
+
+**Note on regions:** storage and Databricks run in UK South; Synapse runs in Southeast Asia. This wasn't the plan — see [Troubleshooting](#troubleshooting-what-actually-happened) below.
+
+## What's different from the tutorial
+
+The tutorial gets the pipeline working end to end. This build keeps that shape but changes three things:
+
+1. **Parameterized ingestion, not hardcoded.** The tutorial uses five separate Copy Data activities, one per file, chained together. This pipeline uses a single Copy Data activity inside a `ForEach` loop, driven by a `Filelist` array parameter (`["Athletes", "Coaches", "EntriesGender", "Medals", "Teams"]`). Adding a sixth dataset means appending one string to the array, not building a new activity.
+
+2. **Derived metrics are persisted, not just printed.** The tutorial computes a couple of baseline aggregates (top gold medal countries, average entries by gender) and only displays them with `.show()`. This pipeline writes both the base type-cast datasets *and* two derived metrics to the transformed layer as their own queryable CSVs, so they're actually usable downstream rather than throwaway notebook output.
+
+3. **Two original analytical metrics**, not in the source tutorial:
+
+   - **Medal efficiency** — medals won per athlete sent (`Total / AthleteCount`). Surfaces small, efficient delegations (San Marino, Bermuda, Armenia) that the raw gold-medal leaderboard — which just rewards the biggest teams — completely hides.
+   - **Gender Parity Index** — `1 - (|Female − Male| / Total)` per discipline, a single 0–1 score where 1.0 is perfect gender balance. More directly comparable across disciplines than reading raw Female/Male ratio columns.
+
+## Repository structure
+
+```
+├── adf/
+│   └── data-ingestion-pipeline.json     # exported ADF pipeline definition
+├── data/
+│   ├── raw-data/                        # source CSVs as ingested by ADF
+│   └── transformed-data/                # type-cast data + the two derived metrics
+├── databricks/
+│   └── Tokyo_olympic_Transformation.ipynb
+├── synapse/
+│   ├── 01_view_creation.sql
+│   ├── 02_top_countries_by_total_medals.sql
+│   ├── 03_top_countries_by_medal_efficiency.sql
+│   ├── 04_top_gender_balanced_disciplines.sql
+│   ├── 05_bottom_gender_balanced_disciplines.sql
+│   └── 06_athlete_count_vs_medal_count.sql
+└── screenshots/
+    └── (chart outputs for each Synapse query above)
+```
+
+## Analytics
+
+Five queries run against the Synapse serverless SQL views, each with a chart in `screenshots/`:
+
+| Script | What it shows |
+|---|---|
+| `02_top_countries_by_total_medals` | Baseline leaderboard — total medals by country |
+| `03_top_countries_by_medal_efficiency` | The original metric — medals per athlete sent |
+| `04_top_gender_balanced_disciplines` | Disciplines closest to a 1.0 Parity Index |
+| `05_bottom_gender_balanced_disciplines` | Disciplines furthest from gender balance |
+| `06_athlete_count_vs_medal_count` | Squad size vs. medal count, justifying why efficiency (not just volume) is the more interesting lens |
+
+## Troubleshooting: what actually happened
+
+This is a real build on an Azure free-trial subscription, not a clean run-through. The friction is part of the point — it's what separates a tutorial clone from understanding the platform:
+
+- **Databricks Serverless, not a dedicated cluster.** UK South had no available compute capacity for standard cluster node types on this trial subscription, so the notebook runs on Serverless compute instead.
+- **Serverless breaks the tutorial's mount approach entirely.** `dbutils.fs.mount` (the tutorial's method, via an app registration) isn't supported on Serverless — Spark Connect restricts direct Hadoop filesystem configuration. The workaround: the `azure-storage-blob` SDK, reading and writing blobs directly via pandas rather than mounting a filesystem path. This also meant Spark's native `df.write.csv()` was unusable (`DBFS_DISABLED` on Serverless), so writes go through the same SDK, which has a side benefit: clean single-file CSVs instead of Spark's folder + part-file + `_SUCCESS` output.
+- **Encoding fix.** Reading `Athletes.csv` with UTF-8 threw a `UnicodeDecodeError` on non-ASCII athlete names. Switched to `latin-1` decoding.
+- **Synapse workspace creation failed repeatedly** in UK South, West Europe, and UK West with `SqlServerRegionDoesNotAllowProvisioning` — a regional SQL Server provisioning restriction on this trial subscription, confirmed via the ARM deployment's raw error output, not a configuration mistake. Resolved by provisioning the Synapse workspace in Southeast Asia instead, giving this project a deliberately cross-region architecture (storage + Databricks in UK South, Synapse compute in Southeast Asia).
+- **`CREATE VIEW` is not allowed in the `dbo` schema** on a Serverless SQL Pool. Resolved by creating a custom `olympic` schema and naming all views `olympic.vw_*`.
+
+## Setup
+
+1. Clone the repo:
+   ```
+   git clone https://github.com/ayaan-sheikh2909/tokyo-olympics-azure-pipeline.git
+   ```
+2. The Databricks notebook authenticates to ADLS Gen2 using a storage account access key. The key in the notebook is a placeholder (`YOUR_STORAGE_ACCOUNT_KEY_HERE`) — replace it with your own storage account key from **Azure Portal → Storage account → Access keys**. Never commit a real key to version control.
+3. Deploy the ADF pipeline (`adf/data-ingestion-pipeline.json`) against your own Data Factory, pointing the HTTP linked service at your CSV source and the ADLS linked service at your own storage account.
+4. Run the Synapse scripts in order (`01` through `06`) against a Serverless SQL Pool, updating the `OPENROWSET` paths to your own storage account.
+
+## Status
+
+This project was built and torn down within a single Azure free-trial credit window. The resource group has been deleted after this repository was published, so the live Azure resources described here no longer exist — the code, notebook, SQL scripts, and sample data in this repo are the full record of the build.
